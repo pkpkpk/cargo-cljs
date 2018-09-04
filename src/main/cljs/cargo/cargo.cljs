@@ -235,7 +235,7 @@
      c)))
 
 (defn init-module
-  ([array-buffer](initModule array-buffer #js{}))
+  ([array-buffer](init-module array-buffer #js{}))
   ([array-buffer importOptions]
    (p->ch (js/WebAssembly.instantiate array-buffer importOptions)
           (promise-chan
