@@ -96,6 +96,18 @@
                      [(merge base {::type :cargo/test-failure
                                    :value msgs
                                    :cargo/stdout msgs})]
+
+                     (string/includes? (peek stderr) "could not find `Cargo.toml`")
+                     [(merge base {::type :cargo/missing-toml
+                                   :value msgs
+                                   :cargo/stdout msgs})]
+
+                     (some-> (first stderr) (string/includes?  "parse manifest"))
+                     [(merge base {::type :cargo/bad-toml
+                                   :value msgs
+                                   :cargo/stdout msgs})]
+
+
                      :else
                      [(merge base {::type :cargo/compilation-failure
                                    :value msgs
@@ -323,6 +335,8 @@
    :cargo/run-failure
    :cargo/fatal-runtime
    :cargo/test-failure
+   :cargo/missing-toml
+   :cargo/bad-toml
 
    :wasm/path-missing-before-wasm-gc
    :wasm/wasm-gc-failure
@@ -347,6 +361,14 @@
 
     :cargo/test-failure
     (run! util/info (get error :stdout))
+
+    :cargo/missing-toml
+    (do
+      (util/err (first (get error :stderr)))
+      (util/err "(case sensitive)")) ;repair would be cool
+
+    :cargo/bad-toml
+    (run! util/err (get error :stderr))
 
     (util/log error)))
 
