@@ -34,7 +34,7 @@
 (defn kill-9
   ([pid]
    (try
-     (exec (str "kill -9" pid))
+     (exec (str "kill -9 " pid))
      (catch js/Error e
        (when-not (string/includes? (.-message e) "No such process")
          (throw e))))))
