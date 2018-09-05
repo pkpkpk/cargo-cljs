@@ -19,9 +19,16 @@ Run `$rustup update` periodically to update the toolchain.
 
 ## TODO
   + Using WASM
+    + basics
+      - ~~exports~~
+      - imports
+      - pointers, memory
     + Node
     + Browser
     + wasm-bindgen
+    + error handling, debugging, source-maps
+  + project templates
+    - CLI?
   + Using Rust
     + ChildProcs
       - serde-json
