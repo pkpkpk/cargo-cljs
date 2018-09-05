@@ -1,0 +1,8 @@
+{:paths ["src/main/cljs"]
+ :deps {org.clojure/clojure {:mvn/version "1.10.0-alpha6"}
+        org.clojure/clojurescript {:mvn/version  "1.10.339"}
+        org.clojure/core.async {:mvn/version "0.4.474"}
+        org.clojure/core.match {:mvn/version "0.3.0-alpha5"}
+        cljs-node-io {:mvn/version "1.1.1"}
+        cargo-cljs {:local/root "../.."}}
+ :aliases {:test {:extra-paths ["src/test"]}}}

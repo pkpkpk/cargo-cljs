@@ -1,3 +1,4 @@
 .cpcache/*
 */target/*
 examples/*/*/target/*
+examples/*/.cpcache/*
