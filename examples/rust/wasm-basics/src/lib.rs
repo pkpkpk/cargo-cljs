@@ -2,7 +2,7 @@
 // '#[no_mangle]' tells rustc to preserve the function name
 //
 // 'pub extern "C"' tells rustc to make a public function
-// that follows the C calling convention (with the wasm spec follows).
+// that follows the C calling convention (which the wasm spec follows).
 //
 // When this module is compiled, externed functions will be exposed to
 // javascript by their string names in the Module.instance.exports object
@@ -47,7 +47,7 @@ use std::os::raw::{c_char, c_void};
 // We need the null terminator on the javascript side to know when to stop reading
 // from memory. When called we are going to pass a pointer (*mut c_char) to the run
 // of c_chars. Javascript will take this pointer, collect each byte until the null
-// byte, and convert those bytes to a javscript string with the TextDecoder
+// byte, and convert those bytes to a javascript string with the TextDecoder
 #[no_mangle]
 pub extern "C" fn hola() -> *mut c_char {
     CString::new("hola").unwrap().into_raw()
@@ -57,17 +57,18 @@ pub extern "C" fn hola() -> *mut c_char {
 //    https://doc.rust-lang.org/std/ffi/struct.CString.html#method.as_ptr
 //    https://doc.rust-lang.org/std/ffi/struct.CString.html#method.into_raw
 // into_raw() says it 'Consumes the CString and transfers ownership of the string to a C caller'.
-//  - This mean rust will disregard that slab of memory until it is returned to it with a from_raw call.
+//   - This mean rust will disregard that slab of memory until it is returned to it with a from_raw
+//     call.
 // Compare this to as_ptr() which states: 'The returned pointer will be valid for as long as self'.
-//  - 'self' is the bonjour CString we created
-//  - since we do not transfer ownership to the caller, when the function scope exits rust will 'drop'
-//    the string and immediately erase the string's allocated memory.
-//  - Our caller then recieves a pointer to nothing, causing undefined behavior. If that memory
-//    remains empty, javascript will read off an empty string. If it gets filled in, it may
-//    keep reading bytes until whenever the next null byte occurs
-//  - This isn't to say you couldn't use as_ptr() successfully, you just have to understand rust's
-//    ownership rules. Most of the dangerous areas will be here at the FFI borders of the system; Rustc
-//    wouldn't let your module compile if you tried to this internally.
+//   - 'self' is the bonjour CString we create. since we do not transfer ownership of the string to
+//     the caller, when the function scope exits rust will 'drop' the string and immediately erase
+//     the string's allocated memory.
+//   - Our caller then receives a pointer to nothing, causing undefined behavior. If that memory
+//     remains empty, javascript will read off an empty string. If it gets filled in, it may
+//     keep reading bytes until whenever the next null byte occurs
+//   - This isn't to say you couldn't use as_ptr() successfully, you just have to understand rust's
+//     ownership rules. Most of the dangerous areas will be here at the FFI borders of the system;
+//     Rustc wouldn't let your module compile if you tried to do this internally.
 #[no_mangle]
 pub extern "C" fn bonjour() -> *const c_char {
     CString::new("bonjour").unwrap().as_ptr()
