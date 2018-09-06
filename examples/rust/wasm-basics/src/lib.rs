@@ -32,10 +32,8 @@ pub extern "C" fn unsafe_long() -> i64 {
     42
 }
 
-
 // If you want to use richer types, you need to communicate via pointers on the wasm memory module
 
-// use std::mem;
 use std::ffi::{CString, CStr};
 use std::os::raw::{c_char, c_void};
 
@@ -55,5 +53,23 @@ pub extern "C" fn hola() -> *mut c_char {
     CString::new("hola").unwrap().into_raw()
 }
 
-
+// This time we return a *const c_char. Compare the docs for CString::as_ptr() vs CString::into_raw()
+//    https://doc.rust-lang.org/std/ffi/struct.CString.html#method.as_ptr
+//    https://doc.rust-lang.org/std/ffi/struct.CString.html#method.into_raw
+// into_raw() says it 'Consumes the CString and transfers ownership of the string to a C caller'.
+//  - This mean rust will disregard that slab of memory until it is returned to it with a from_raw call.
+// Compare this to as_ptr() which states: 'The returned pointer will be valid for as long as self'.
+//  - 'self' is the bonjour CString we created
+//  - since we do not transfer ownership to the caller, when the function scope exits rust will 'drop'
+//    the string and immediately erase the string's allocated memory.
+//  - Our caller then recieves a pointer to nothing, causing undefined behavior. If that memory
+//    remains empty, javascript will read off an empty string. If it gets filled in, it may
+//    keep reading bytes until whenever the next null byte occurs
+//  - This isn't to say you couldn't use as_ptr() successfully, you just have to understand rust's
+//    ownership rules. Most of the dangerous areas will be here at the FFI borders of the system; Rustc
+//    wouldn't let your module compile if you tried to this internally.
+#[no_mangle]
+pub extern "C" fn bonjour() -> *const c_char {
+    CString::new("bonjour").unwrap().as_ptr()
+}
 

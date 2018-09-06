@@ -10,10 +10,7 @@
 
 (defn mod-tests [module]
   (with-redefs [basics/module (atom module)]
-    (let [Module #js{:memory (.. module -exports -memory)
-                     :get_42  (.. module -exports -get_42)
-                     :add_42  (.. module -exports -add_42)
-                     :unsafe_long (.. module -exports -unsafe_long)}]
+    (let [Module #js{:memory (.. module -exports -memory)}]
       (is (= 42 (basics/get-42)))
       (is (= 42 (basics/add-42 0)))
       (is (= 45 (basics/add-42 js/Math.PI)))
@@ -22,7 +19,8 @@
         (is (= -2147483607 (basics/add-42  2147483647)))
         (is (thrown-with-msg? #"unreachable" (basics/add-42  2147483647))))
       (is (thrown-with-msg? js/Error #"invalid type" (basics/unsafe_long)))
-      (is (= "hola" (basics/hola))))))
+      (is (= "hola" (basics/hola)))
+      (is (= "" (basics/bonjour))))))
 
 (deftest basics-test
   (async done

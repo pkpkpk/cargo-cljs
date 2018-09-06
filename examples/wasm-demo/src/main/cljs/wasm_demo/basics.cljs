@@ -80,3 +80,10 @@
       ;; Carrying a ref across a grow call can end w/ undefined data!
       (collectCString (.. Mod -exports -memory -buffer) ptr))
     (throw (js/Error. "missing basics module"))))
+
+(defn bonjour []
+  (if-let [Mod @module]
+    (let [ptr ((.. Mod -exports -bonjour))]
+      (collectCString (.. Mod -exports -memory -buffer) ptr))
+    (throw (js/Error. "missing basics module"))))
+
