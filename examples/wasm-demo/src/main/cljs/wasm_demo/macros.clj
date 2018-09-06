@@ -6,6 +6,8 @@
             [clojure.java.io :as io]
             [clojure.edn :as edn]))
 
+(defmacro nodejs? [] (= :nodejs (get-in @env/*compiler* [:options :target])))
+
 (defn root-file []
   (let [caller-file (io/file ana/*cljs-file*)]
     (loop [f (.getParentFile caller-file)]

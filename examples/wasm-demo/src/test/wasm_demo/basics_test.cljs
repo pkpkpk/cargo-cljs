@@ -8,18 +8,21 @@
 
 (def path (js/require "path"))
 
-(set! cargo/*verbose* false)
-
 (defn mod-tests [module]
-  (let [Module #js{:memory (.. module -exports -memory)
-                   :get_42  (.. module -exports -get_42)
-                   :add_42  (.. module -exports -add_42)
-                   :unsafe_long (.. module -exports -unsafe_long)}]
-    (is (= 42 (.get_42 Module)))
-    (is (= 42 (.add_42 Module 0)))
-    (is (= 45 (.add_42 Module js/Math.PI)))
-    (is (= -2147483607 (.add_42 Module 2147483647)))
-    (is (thrown-with-msg? js/Error #"invalid type" (.unsafe_long Module)))))
+  (with-redefs [basics/module (atom module)]
+    (let [Module #js{:memory (.. module -exports -memory)
+                     :get_42  (.. module -exports -get_42)
+                     :add_42  (.. module -exports -add_42)
+                     :unsafe_long (.. module -exports -unsafe_long)}]
+      (is (= 42 (basics/get-42)))
+      (is (= 42 (basics/add-42 0)))
+      (is (= 45 (basics/add-42 js/Math.PI)))
+      (is (= 2147483647 (basics/add-42 (- 2147483647 42))))
+      (if (get basics/cfg :release?)
+        (is (= -2147483607 (basics/add-42  2147483647)))
+        (is (thrown-with-msg? #"unreachable" (basics/add-42  2147483647))))
+      (is (thrown-with-msg? js/Error #"invalid type" (basics/unsafe_long)))
+      (is (= "hola" (basics/hola))))))
 
 (deftest basics-test
   (async done

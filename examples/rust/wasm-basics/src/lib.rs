@@ -1,6 +1,3 @@
-// #![feature(wasm_import_memory)]
-// #![wasm_import_memory]
-
 
 // '#[no_mangle]' tells rustc to preserve the function name
 //
