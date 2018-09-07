@@ -13,13 +13,7 @@
   {:project-name "fressian-wasm-demo"
    :dir (path.join (dmac/example-path) "rust"  "fressian-wasm-demo")
    :target :wasm
-   :release? true
-   :rustflags {:allow [:dead_code
-                       :unused_imports
-                       :non_snake_case
-                       :unused_parens
-                       :unused_variables
-                       :non_camel_case_types]}})
+   :release? true})
 
 (defonce module (atom nil))
 
