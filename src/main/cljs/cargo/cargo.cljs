@@ -38,7 +38,8 @@
 
 (defn clean-project [{:keys [project-name] :as cfg}]
   (let [p (path.join (project-path cfg) "target")]
-    (fs/rm-r p)))
+    (when (fs/fexists? p)
+      (fs/rm-r p))))
 
 (defn target->arg [target]
   (condp = target
@@ -165,10 +166,18 @@
         rustc-cfg (cfgs->str cfg)]
     (string/join " " (concat allow rustc-cfg))))
 
+
+;; per alexchrichton: importing memory is done now with a custom linker flag to LLD
+;; rustc with `-C link-args=--import-memory`
+; (when provide-memory? (assert (= target :wasm)))
+
+;  :provide-memory?
+;  :silent?
+
 (defn build-rust-flags [{ :as cfg}]
   (let [allow (allows->str (get-in cfg [:rustflags :allow]))
         rustc-cfg (cfgs->str (get-in cfg [:rustflags :cfg]))]
-    (str allow " " rustc-cfg)))
+    (str allow " " rustc-cfg))) ;" " "-C" "link-args=--import-memory"
 
 ; RUST_BACKTRACE env opt, values #{"1", "full"}
 
@@ -256,7 +265,7 @@
            :build-dir build-dir
            :dot-wasm-path dot-wasm-path)))
 
-(defn build-wasm! ;=> pchan<[?err ?buffer]>
+(defn internal-build-wasm! ;=> pchan<[?err ?buffer]>
   "1. cargo to builds a fat wasm file
    2. exec wasm-gc to shrink fat wasm
    3. slurp final wasm"
@@ -293,7 +302,7 @@
   (with-promise out
     (->
      (if (= :wasm (get cfg :target))
-       (build-wasm! cfg)
+       (internal-build-wasm! cfg)
        (let [cmd (get cfg :cmd)]
          (condp = cmd
            :test (cargo-test cfg)
@@ -393,3 +402,37 @@
            (remove nil?))
           (:cargo/stdout (first @last-result)))))
 
+
+(defn build-wasm!
+  "Convenience function to build and instantiate modules local to the build
+   process (..nodejs), configured to use default error reporting along the way
+   Returns  pchan<[?err ?instantiated-module]>
+   ex:
+      (defonce module (atom nil))
+
+      (defn build []
+        (take! (cargo/build-wasm! your-cfg)
+          (fn [[e Mod]]
+            (if-not e
+              (reset! module Mod)))))"
+  ([cfg] (build-wasm! cfg nil))
+  ([cfg import-options]
+   (assert (= :wasm (get cfg :target)))
+   ;;validate importOptions
+   (js/console.clear)
+   (with-promise out
+     (take! (build! cfg)
+      (fn [[e buffer]]
+        (if e
+          (do
+            (report-error e)
+            (put! out [e]))
+          (let [importOptions (or importOptions (get cfg :importOptions #js{}))]
+            (take! (init-module buffer importOptions)
+              (fn [[e compiled]]
+                (if e
+                  (do
+                    (report-error e)
+                    (put! out [e]))
+                    (do
+                      (put! out [nil (.. compiled -instance)]))))))))))))
