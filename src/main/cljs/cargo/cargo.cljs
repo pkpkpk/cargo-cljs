@@ -1,14 +1,15 @@
 (ns cargo.cargo
   (:require-macros [cljs.core.async.macros :refer [go go-loop]]
                    [cargo.macros :refer [with-promise] :as mac])
-  (:require [cljs.core.async :as casync :refer [close! put! take! alts! <! >! chan promise-chan]]
+  (:require [cljs.core.async :as casync :refer [close! put! take! promise-chan]]
             [clojure.string :as string]
             [cljs-node-io.proc :as proc]
             [cljs-node-io.async :as nasync :refer [go-proc]]
             [cljs-node-io.core :as io :refer [aslurp slurp spit]]
             [cljs-node-io.fs :as fs]
             [cargo.spawn :as spawn]
-            [cargo.util :as util]))
+            [cargo.util :as util]
+            [cargo.report :as report]))
 
 (def path (js/require "path"))
 
@@ -182,41 +183,20 @@
 ; RUST_BACKTRACE env opt, values #{"1", "full"}
 
 (defn spawn-cargo
-  "opts are merged with cfg to build cmd line opts."
-  ([cmd cfg] (spawn-cargo cmd cfg nil))
-  ([cmd {:keys [project-name] :as cfg} opts]
-   (assert (#{"build" "run" "test"} cmd) (str "unsupport cargo cmd " cmd))
-   (let [location (project-path cfg)]
-     (assert (fs/fexists? location) (str "cannot compile `" project-name"`, location " location " does not exist."))
-     (let [args (into [cmd] (cfg->build-args (merge cfg opts)))
-           rustflags (build-rust-flags cfg)
-           opts (merge {:cwd location
-                        :json->edn? true
-                        :silent? true
-                        :env (merge {"RUSTFLAGS" rustflags} (get cfg :env))} opts)
-           out (collect-build (spawn/collected-spawn "cargo" args opts))]
-       (when *verbose* (util/status "$ " (string/join " " (into ["cargo"] args))))
-       (when *verbose* (util/status (pr-str opts)))
-       out))))
-
-(defn cargo-build
-  ([cfg] (cargo-build cfg nil))
-  ([cfg opts] (spawn-cargo "build" cfg opts)))
-
-(defn cargo-run
-  "Builds and then runs src/bin/main.rs. Not applicable to wasm targets"
-  ([cfg] (cargo-run cfg nil))
-  ([cfg opts] (spawn-cargo "run" cfg opts)))
-
-(defn cargo-test
-  "`$cargo test` leaves alot to be desired:
-     - It suppresses output during builds
-     - it obscures logging during tests (supposedly theres a --nocapture flag but cant get it to work)
-     - there is no structured (json) test result output."
-  ([cfg] (cargo-test cfg nil))
-  ([cfg opts] (spawn-cargo "test" cfg opts)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  [cmd {:keys [project-name] :as cfg}]
+  (assert (#{"build" "run" "test"} cmd) (str "unsupport cargo cmd " cmd))
+  (let [location (project-path cfg)]
+    (assert (fs/fexists? location) (str "cannot compile `" project-name"`, location " location " does not exist."))
+    (let [args (into [cmd] (cfg->build-args cfg))
+          rustflags (build-rust-flags cfg)
+          opts {:cwd location
+                :json->edn? true
+                :silent? true
+                :env (merge {"RUSTFLAGS" rustflags} (get cfg :env))}
+          out (collect-build (spawn/collected-spawn "cargo" args opts))]
+      (when *verbose* (util/status "$ " (string/join " " (into ["cargo"] args))))
+      (when *verbose* (util/status (pr-str opts)))
+      out)))
 
 (defn wasm-gc [{:keys [project-name release? build-dir] :as cfg}]
   (with-promise out
@@ -265,50 +245,45 @@
            :build-dir build-dir
            :dot-wasm-path dot-wasm-path)))
 
-(defn internal-build-wasm! ;=> pchan<[?err ?buffer]>
-  "1. cargo to builds a fat wasm file
-   2. exec wasm-gc to shrink fat wasm
-   3. slurp final wasm"
-  [{:keys [project-name] :as cfg}]
-  (assert (and (map? cfg) (= :wasm (get cfg :target))))
-  (when *verbose* (util/info "building wasm project" project-name))
+(defn wasm-gc-and-slurp
+  "1. exec wasm-gc to shrink fat wasm file per the config
+   2. slurp final wasm
+   => pchan<[?err ?buffer]>"
+  [cfg]
+  (assert (= :wasm (get cfg :target)))
   (let [cfg (config-wasm-paths cfg)]
     (with-promise out
-      (take! (cargo-build cfg)
-        (fn [[e data :as res]]
-          (when *verbose* (util/status "cargo exit"))
-          (if e (put! out res)
-            (take! (wasm-gc cfg)
-              (fn [[e :as res]]
-                (if e (put! out res)
-                  (do
-                    (when *verbose* (util/status "wasm gc success"))
-                    (let [path (get cfg :dot-wasm-path)]
-                      (take! (aslurp path :encoding "")
-                        (fn [[ioerr buffer]]
-                          (if ioerr
-                            (put! out [{::type :wasm/slurp-module-failure :value ioerr}])
-                            (do
-                              (when *verbose* (util/success "wasm compilation success, returning compiled module"))
-                              (put! out [nil buffer]))))))))))))))))
+      (take! (wasm-gc cfg)
+        (fn [[err :as res]]
+          (if err (put! out res)
+            (let [path (get cfg :dot-wasm-path)]
+              (take! (aslurp path :encoding "")
+                (fn [[ioerr buffer]]
+                  (if ioerr
+                    (put! out [{::type :wasm/slurp-module-failure :value ioerr}])
+                    (do
+                      (when *verbose* (util/success "wasm compilation success, returning compiled module"))
+                      (put! out [nil buffer]))))))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defonce last-result (atom nil))
 
-(defn build! [cfg]
+(defn build!
+  ""
+  [cfg]
   (when-let [cmd (and (not= (get cfg :target) :wasm) (get cfg :cmd))]
     (assert (#{:test :run} cmd) "only support :target :wasm builds, '$cargo run', or '$cargo test'"))
   (with-promise out
     (->
-     (if (= :wasm (get cfg :target))
-       (internal-build-wasm! cfg)
-       (let [cmd (get cfg :cmd)]
-         (condp = cmd
-           :test (cargo-test cfg)
-           :run (cargo-run cfg)
-           (cargo-build cfg))))
+     (let [cmd (get cfg :cmd)]
+       (condp = cmd
+         :test (spawn-cargo "test" cfg)
+         :run (spawn-cargo "run" cfg)
+         (spawn-cargo "build" cfg)))
      (take! #(put! out (reset! last-result %))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defonce watchers (atom {:project-name :watch-instance}))
 
@@ -336,103 +311,3 @@
     (swap! watchers dissoc project-name)))
 
 
-
-(def error-types
-  [:spawn-error
-
-   :cargo/compilation-failure
-   :cargo/run-failure
-   :cargo/fatal-runtime
-   :cargo/test-failure
-   :cargo/missing-toml
-   :cargo/bad-toml
-
-   :wasm/path-missing-before-wasm-gc
-   :wasm/wasm-gc-failure
-   :wasm/path-missing-after-wasm-gc
-   :wasm/slurp-module-failure
-   :wasm/instantiation-failure])
-
-(defn report-error [error]
-  (util/err (::type error))
-  (condp = (::type error)
-    :cargo/compilation-failure
-    (let [rs (into []
-                   (comp
-                    (map #(get-in % [:message :rendered]))
-                    (remove nil?)
-                    (distinct))
-                   (:cargo/stdout error))]
-      (run! util/err rs))
-
-    :cargo/fatal-runtime
-    (run! util/err (get error :stderr))
-
-    :cargo/test-failure
-    (run! util/info (get error :stdout))
-
-    :cargo/missing-toml
-    (do
-      (util/err (first (get error :stderr)))
-      (util/err "(case sensitive)")) ;repair would be cool
-
-    :cargo/bad-toml
-    (run! util/err (get error :stderr))
-
-    (util/log error)))
-
-
-(defn get-stdout []
-  (let [[e data] @last-result]
-    (if e
-      (get-in e [:stdout])
-      (get-in data [:stdout]))))
-
-(defn get-stderr [] ;; need to separate out cargo stderr
-  (let [[e data] @last-result]
-    (if e
-      (get-in e [:stderr])
-      (get-in data [:stderr]))))
-
-(defn explain []
-  (when (some? (first @last-result))
-    (into []
-          (comp
-           (map #(get-in % [:message :code :explanation]))
-           (remove nil?))
-          (:cargo/stdout (first @last-result)))))
-
-
-(defn build-wasm!
-  "Convenience function to build and instantiate modules local to the build
-   process (..nodejs), configured to use default error reporting along the way
-   Returns  pchan<[?err ?instantiated-module]>
-   ex:
-      (defonce module (atom nil))
-
-      (defn build []
-        (take! (cargo/build-wasm! your-cfg)
-          (fn [[e Mod]]
-            (if-not e
-              (reset! module Mod)))))"
-  ([cfg] (build-wasm! cfg nil))
-  ([cfg import-options]
-   (assert (= :wasm (get cfg :target)))
-   ;;validate importOptions
-   (js/console.clear)
-   (with-promise out
-     (take! (build! cfg)
-      (fn [[e buffer]]
-        (if e
-          (do
-            (report-error e)
-            (put! out [e]))
-          (let [importOptions (or importOptions (get cfg :importOptions #js{}))]
-            (take! (init-module buffer importOptions)
-              (fn [[e compiled]]
-                (if e
-                  (do
-                    (report-error e)
-                    (put! out [e]))
-                    (do
-                      (put! out [nil (.. compiled -instance)]))))))))))))
