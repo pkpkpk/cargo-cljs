@@ -8,6 +8,7 @@
 
 (defn cargo-build
   "Builds the artifact described by the config
+     + Compiler warnings may still be present in a successful result
    => pchan<[?err ?ok]>"
   ([cfg] (cargo/build! (assoc cfg :cmd "build"))))
 
@@ -16,56 +17,65 @@
      + Not applicable to wasm targets
      + Compiler warnings may still be present in a successful result
      + If your process emits json it will automatically be converted to edn
+       under the ok's :stdout key
    => pchan<[?err ?ok]>"
   ([cfg] (cargo/build! (assoc cfg :cmd "run"))))
 
 (defn cargo-test
   "Runs cargo's built in test runner.
-    `$cargo test` leaves alot to be desired:
-     - It suppresses output during builds
-     - it obscures logging during tests (supposedly theres a --nocapture flag but cant get it to work)
-     - there is no structured (json) test result output.
-   Compiler warnings may still be present in a successful result
+    + `$cargo test` leaves alot to be desired:
+      - It suppresses output during builds
+      - it obscures logging during tests (supposedly theres a --nocapture flag but cant get it to work)
+      - there is no structured (json) test result output.
+    + Compiler warnings may still be present in a successful result
    => pchan<[?err ?ok]>"
   ([cfg] (cargo/build! (assoc cfg :cmd "run"))))
 
-(defn clean-project [cfg]
-  (cargo/clean-project cfg))
+(defn clean-project
+  "delete compiled artifacts"
+  [cfg] (cargo/clean-project cfg))
 
 (defn build-wasm!
-  "Builds a wasm project but goes the extra steps of exec'ing wasm-gc on the
+  "Builds a wasm project but with the extra steps of exec'ing wasm-gc on the
    build artifact and returning it as an uninstantiated buffer
+     + Compiler warnings may still be present in a successful result
    => pchan<[?err ?buffer]>"
   ([cfg]
    (assert (= :wasm (get cfg :target)))
+   (util/info "building wasm project" (get cfg :project-name))
    (with-promise out
      (take! (cargo-build cfg)
-        (fn [[err :as res]]
-          (if err (put! out res)
-            (take! (cargo/wasm-gc-and-slurp cfg) #(put! out %))))))))
+       (fn [[err :as res]]
+         (if err (put! out res)
+           (take! (cargo/wasm-gc-and-slurp cfg) #(put! out %))))))))
 
 (defn build-wasm-local!
   "Build and instantiate modules local to the build nodejs process.
+     + Compiler warnings may still be present in a successful result
    => pchan<[?err ?instantiated-module]>"
   ([cfg](build-wasm-local! cfg nil))
   ([cfg importOptions]
-   (util/info "building wasm project" project-name)
+   (assert (= :wasm (get cfg :target)))
    (with-promise out
      (take! (build-wasm! cfg)
-       (fn [[err buffer]]
-         (if err (put! out [err])
+       (fn [[err buffer :as res]]
+         (if err (put! out res)
            (let [importOptions (or importOptions (get cfg :importOptions #js{}))]
              (take! (cargo/init-module buffer importOptions)
-               (fn [[err compiled]]
-                 (if err
-                   (put! out [err])
+               (fn [[err compiled :as res]]
+                 (if err (put! out res)
                    (put! out [nil (.. compiled -instance)])))))))))))
+
+
+
+; (defn wasm-auto-push [cfg server-cfg])
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; debug helpers
 
 (defn report-error
   [err]
   (report/report-error err))
-
-; (defn wasm-auto-push [cfg server-cfg])
 
 (defn last-result [] @cargo/last-result)
 
