@@ -39,15 +39,18 @@
   "Builds a wasm project but with the extra steps of exec'ing wasm-gc on the
    build artifact and returning it as an uninstantiated buffer
      + Compiler warnings may still be present in a successful result
-   => pchan<[?err ?buffer]>"
+   => pchan<[?err ?{:buffer js/Buffer, ...}]>"
   ([cfg]
    (assert (= :wasm (get cfg :target)))
    (util/info "building wasm project" (get cfg :project-name))
    (with-promise out
      (take! (cargo-build cfg)
-       (fn [[err :as res]]
-         (if err (put! out res)
-           (take! (cargo/wasm-gc-and-slurp cfg) #(put! out %))))))))
+       (fn [[err :as comp-res]]
+         (if err (put! out comp-res)
+           (take! (cargo/wasm-gc-and-slurp cfg)
+            (fn [[err buffer :as gc-res]]
+              (if err (put! out gc-res)
+                (put! out [nil (assoc comp-res :buffer buffer)]))))))))))
 
 (defn build-wasm-local!
   "Build and instantiate modules local to the build nodejs process.
@@ -58,12 +61,12 @@
    (assert (= :wasm (get cfg :target)))
    (with-promise out
      (take! (build-wasm! cfg)
-       (fn [[err buffer :as res]]
-         (if err (put! out res)
+       (fn [[err {:keys [buffer]} :as comp-res]]
+         (if err (put! out comp-res)
            (let [importOptions (or importOptions (get cfg :importOptions #js{}))]
              (take! (cargo/init-module buffer importOptions)
-               (fn [[err compiled :as res]]
-                 (if err (put! out res)
+               (fn [[err compiled :as init-res]]
+                 (if err (put! out init-res)
                    (put! out [nil (.. compiled -instance)])))))))))))
 
 
