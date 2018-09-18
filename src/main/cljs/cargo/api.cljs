@@ -22,7 +22,7 @@
   ([cfg] (cargo/build! (assoc cfg :cmd "run"))))
 
 (defn cargo-test
-  "Runs cargo's built in test runner.
+  "Run cargo's built-in test runner.
     + `$cargo test` leaves alot to be desired:
       - It suppresses output during builds
       - it obscures logging during tests (supposedly theres a --nocapture flag but cant get it to work)
@@ -87,21 +87,31 @@
       (get-in e [:stdout])
       (get-in data [:stdout]))))
 
-(defn get-cargo-out
-  "compiler messages from last build"
-  []
-  (let [[e data] (last-result)]
-    (if e
-      (get-in e [:cargo/stdout])
-      (get-in data [:cargo/stdout]))))
-
-(defn get-stderr ;; TODO: separate out cargo stderr
+(defn get-stderr
   "stderr from last build"
   []
   (let [[e data] (last-result)]
     (if e
       (get-in e [:stderr])
       (get-in data [:stderr]))))
+
+(defn get-warnings
+  "warnings from last build"
+  []
+  (let [[e data] (last-result)]
+    (if e
+      (get e :warnings)
+      (get data :warnings))))
+
+(defn get-errors
+  "errors from last build"
+  []
+  (let [[e data] (last-result)]
+    (if e
+      (get e :errors)
+      (get data :errors))))
+
+
 
 ; (defn explain []
 ;   (when (some? (first @last-result))
