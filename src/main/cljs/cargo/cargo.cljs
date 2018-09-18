@@ -47,24 +47,20 @@
     :wasm "--target=wasm32-unknown-unknown"
     nil))
 
-(defn cargo-msg? [m]
-  (or
-   (some? (:message m))
-   (some? (:reason m))))
-
 (defn collect-build
   "Sorts spawn output into failed and result, returning a promise-chan yielding
    nodeback vector:
 
    if error
       => [{::type :error-type
-           :stdout stdout
-           :stderr stderr}]
+           :warnings [{}..]
+           :errors [{}..]
+           :stdout [...]
+           :stderr [...]}]
    else
-      => [nil {:value (peek stdout)
-               :stdout Vec<stdout from your app (cargo run only), edn if applicable>
-               :cargo/stdout Vec<compiler-messages>
-               :stderr stderr}]"
+      => [nil {:warnings [{}...]
+               :stdout [<-- your app output--> ]
+               :stderr ['status' 'messages']}]"
   [spawn-chan]
   (with-promise out
     (take! spawn-chan
@@ -72,48 +68,29 @@
        (if (some? spawn-error)
          (put! out [{::type :spawn-error :value spawn-error}])
          (let [[exit-code stdout stderr] res
-               msgs (filterv cargo-msg? stdout)
-               stdout (filterv (complement cargo-msg?) stdout)
-               base {:stdout stdout
-                     :stderr stderr
-                     :cargo/stdout msgs}]
+               {:keys [msgs warnings] :as base} (report/sort-cargo-stdout stdout)
+               base (assoc base :stderr stderr)]
            (if (zero? exit-code)
-             (do
-               (when (and *verbose* (not (empty? stderr)))
-                 (util/info (apply str stderr)))
-               (put! out [nil (assoc base :value (peek stdout))]))
-             (put! out
-                   (cond
-                     (string/includes? (peek stderr) "Running")
-                     [(merge base {::type :cargo/run-failure
-                                   :value msgs
-                                   :cargo/stdout msgs})]
+             (put! out [nil base])
+             (let [key (cond
+                         (string/includes? (peek stderr) "Running")
+                         :cargo/run-failure
 
-                     (some #(string/includes? % "fatal runtime") stderr)
-                     [(merge base {::type :cargo/fatal-runtime
-                                   :value msgs
-                                   :cargo/stdout msgs})]
+                         (some #(string/includes? % "fatal runtime") stderr)
+                         :cargo/fatal-runtime
 
-                     (string/includes? (peek stderr) "test failed")
-                     [(merge base {::type :cargo/test-failure
-                                   :value msgs
-                                   :cargo/stdout msgs})]
+                         (string/includes? (peek stderr) "test failed")
+                         :cargo/test-failure
 
-                     (string/includes? (peek stderr) "could not find `Cargo.toml`")
-                     [(merge base {::type :cargo/missing-toml
-                                   :value msgs
-                                   :cargo/stdout msgs})]
+                         (string/includes? (peek stderr) "could not find `Cargo.toml`")
+                         :cargo/missing-toml
 
-                     (some-> (first stderr) (string/includes?  "parse manifest"))
-                     [(merge base {::type :cargo/bad-toml
-                                   :value msgs
-                                   :cargo/stdout msgs})]
+                         (some-> (first stderr) (string/includes?  "parse manifest"))
+                         :cargo/bad-toml
 
-
-                     :else
-                     [(merge base {::type :cargo/compilation-failure
-                                   :value msgs
-                                   :cargo/stdout msgs})])))))))))
+                         :else
+                         :cargo/compilation-failure)]
+               (put! out [(assoc base ::type key)])))))))))
 
 (def cargo-arg->str
   (let [sb (goog.string.StringBuffer.)]
