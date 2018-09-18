@@ -1,5 +1,6 @@
 (ns cargo.util
-  (:require [clojure.string :as string]))
+  (:require [clojure.string :as string]
+            [cljs.pprint :as pp]))
 
 (def default-palette
   {:info-color "black"
@@ -24,6 +25,8 @@
     :err     (str "background-color: " (*palette* :err-bg) "; color:" (*palette* :err-color) ";")
     nil))
 
+(def ^:dynamic *pprint* true)
+
 (defn style-args
   "coerces data structures to strings for flat styling"
   [args key]
@@ -35,10 +38,19 @@
         (let [item (first args)]
           (if (string? item)
             (.append sb " " item)
-            (.append sb " " (pr-str item)))
+            (.append sb " " (if ^boolean *pprint*
+                              (with-out-str (pp/pprint item))
+                              (pr-str item))))
           (recur (rest args)))))))
 
-(def ^:dynamic *log*)
+(def ^{:dynamic true :doc "should be fn<var-args>"} *log*)
+(def ^{:dynamic true :doc "should be fn<var-args>"} *info*)
+(def ^{:dynamic true :doc "should be fn<var-args>"} *status*)
+(def ^{:dynamic true :doc "should be fn<var-args>"} *success*)
+(def ^{:dynamic true :doc "should be fn<var-args>"} *warn*)
+(def ^{:dynamic true :doc "should be fn<var-args>"} *warning*)
+(def ^{:dynamic true :doc "should be fn<var-args>"} *err*)
+(def ^{:dynamic true :doc "should be fn<var-args>"} *error*)
 
 (defn log
   "applies no styling"
@@ -47,9 +59,7 @@
     (apply *log* args)
     (apply js/console.log args)))
 
-(def ^:dynamic *info*)
-
-(def info
+(def ^{:doc "formatted info msg"} info
   (if (exists? js/window.devtools)
     (fn [& args]
       (if *info*
@@ -59,11 +69,9 @@
     (fn [& args]
       (if *info*
         (apply *info* args)
-        (apply js/console.info args)))))
+        (apply println args)))))
 
-(def ^:dynamic *status*)
-
-(def status
+(def ^{:doc "formatted status msg. An alternative format to info"} status
   (if (exists? js/window.devtools)
     (fn [& args]
       (if *status*
@@ -75,9 +83,7 @@
         (apply *status* args)
         (apply info args)))))
 
-(def ^:dynamic *success*)
-
-(def success
+(def ^{:doc "formatted success msg"} success
   (if (exists? js/window.devtools)
     (fn [& args]
       (if *success*
@@ -89,9 +95,7 @@
         (apply *success* args)
         (apply info args)))))
 
-(def ^:dynamic *warn*)
-
-(def warn
+(def ^{:doc "soft formatted warning msg, no stack trace"} warn
   (if (exists? js/window.devtools)
     (fn [& args]
       (if *warn*
@@ -101,18 +105,16 @@
     (fn [& args]
       (if *warn*
         (apply *warn* args)
-        (apply js/console.warn args)))))
+        (apply js/console.warn (map pr-str args))))))
 
-(def ^:dynamic *warning*)
-
-(defn warning [& args]
+(defn warning
+  "log a hard warning with generated stack trace"
+  [& args]
   (if *warning*
     (apply *warning* args)
     (apply js/console.warn args)))
 
-(def ^:dynamic *err*)
-
-(def err
+(def ^{:doc "soft formatted error msg, no stack trace"} err
   (if (exists? js/window.devtools)
     (fn [& args]
       (if *err*
@@ -122,11 +124,11 @@
     (fn [& args]
       (if *err*
         (apply *err* args)
-        (apply js/console.error args)))))
+        (apply js/console.error (map pr-str args))))))
 
-(def ^:dynamic *error*)
-
-(defn error [& args]
+(defn error
+  "log a error warning with generated stack trace"
+  [& args]
   (if *error*
     (apply *error* args)
     (apply js/console.error args)))
