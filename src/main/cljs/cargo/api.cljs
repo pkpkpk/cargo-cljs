@@ -50,7 +50,7 @@
            (take! (cargo/wasm-gc-and-slurp cfg)
             (fn [[err buffer :as gc-res]]
               (if err (put! out gc-res)
-                (put! out [nil (assoc comp-res :buffer buffer)]))))))))))
+                (put! out (reset! cargo/last-result (assoc-in comp-res [1 :buffer] buffer))))))))))))
 
 (defn build-wasm-local!
   "Build and instantiate modules local to the build nodejs process.
