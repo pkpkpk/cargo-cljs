@@ -64,14 +64,16 @@
   [spawn-chan]
   (with-promise out
     (take! spawn-chan
-     (fn [[spawn-error res]]
+     (fn [[spawn-error [exit-code stdout stderr :as res]]]
        (if (some? spawn-error)
          (put! out [{::type :spawn-error :value spawn-error}])
-         (let [[exit-code stdout stderr] res
-               {:keys [msgs warnings] :as base} (report/sort-cargo-stdout stdout)
-               base (assoc base :stderr stderr)]
+         (let [base (-> (report/sort-cargo-stdout stdout)
+                        (assoc :stderr stderr))]
            (if (zero? exit-code)
-             (put! out [nil base])
+             (do
+               (when (and *verbose* (not-empty (get base :warnings)))
+                 (util/warn "found warnings"))
+               (put! out [nil base]))
              (let [key (cond
                          (string/includes? (peek stderr) "Running")
                          :cargo/run-failure
@@ -108,7 +110,10 @@
   (when features (assert (or (string? features) (vector? features))))
   (let [args (cond-> [(target->arg target)
                       (when release? "--release")
-                      "--message-format=json"]
+                      "--message-format=json"
+                      ; "--lib"
+                      ; "--test" "NAME"
+                      ]
                 verbose? (conj "--verbose")
                 features (conj "--features" (if (string? features)
                                               features
@@ -117,9 +122,10 @@
                 bin-args (conj "--" bin-args))]
     (filterv some? args)))
 
-(def kws->args
+(def ^{:doc "combines a flag with each kw arg as a string. '-A unused_parens ...'"}
+  flagged-kw-args
   (let [sb (goog.string.StringBuffer.)]
-    (fn [kws flag]
+    (fn [flag kws]
       (doseq [k kws]
         (.append sb flag)
         (.append sb " ")
@@ -129,43 +135,27 @@
         (.clear sb)
         s))))
 
-(defn allows->str
-  [allows]
-  (kws->args allows "-A"))
-
-(defn cfgs->str
-  [cs]
-  (kws->args cs "--cfg"))
-
-(defn cfg->rustflags
-  [{:keys [allow cfg]}]
-  {:post [string?]}
-  (let [allow (allows->str allow)
-        rustc-cfg (cfgs->str cfg)]
-    (string/join " " (concat allow rustc-cfg))))
-
-
 ;; per alexchrichton: importing memory is done now with a custom linker flag to LLD
 ;; rustc with `-C link-args=--import-memory`
 ; (when provide-memory? (assert (= target :wasm)))
-
 ;  :provide-memory?
 ;  :silent?
 
-(defn build-rust-flags [{ :as cfg}]
-  (let [allow (allows->str (get-in cfg [:rustflags :allow]))
-        rustc-cfg (cfgs->str (get-in cfg [:rustflags :cfg]))]
-    (str allow " " rustc-cfg))) ;" " "-C" "link-args=--import-memory"
+(defn cfg->rustflags [{ :as cfg}]
+  (let [allow (flagged-kw-args "-A" (get-in cfg [:rustflags :allow]))
+        rustc-cfg (flagged-kw-args "--cfg" (get-in cfg [:rustflags :cfg]))]
+    (string/join " " [allow rustc-cfg])))
 
+; "-C" "link-args=--import-memory"  llvm args?
 ; RUST_BACKTRACE env opt, values #{"1", "full"}
 
 (defn spawn-cargo
-  [cmd {:keys [project-name] :as cfg}]
+  [cmd {:keys [project-name silent?] :as cfg}]
   (assert (#{"build" "run" "test"} cmd) (str "unsupport cargo cmd " cmd))
   (let [location (project-path cfg)]
     (assert (fs/fexists? location) (str "cannot compile `" project-name"`, location " location " does not exist."))
     (let [args (into [cmd] (cfg->build-args cfg))
-          rustflags (build-rust-flags cfg)
+          rustflags (cfg->rustflags cfg)
           opts {:cwd location
                 :json->edn? true
                 :silent? true
@@ -247,17 +237,15 @@
 (defonce last-result (atom nil))
 
 (defn build!
-  ""
+  "we route everything through here to simplify storing build results in last-result"
   [cfg]
   (when-let [cmd (and (not= (get cfg :target) :wasm) (get cfg :cmd))]
     (assert (#{:test :run} cmd) "only support :target :wasm builds, '$cargo run', or '$cargo test'"))
   (with-promise out
-    (->
-     (let [cmd (get cfg :cmd)]
-       (condp = cmd
-         :test (spawn-cargo "test" cfg)
-         :run (spawn-cargo "run" cfg)
-         (spawn-cargo "build" cfg)))
+    (-> (case (get cfg :cmd)
+          :test (spawn-cargo "test" cfg)
+          :run (spawn-cargo "run" cfg)
+          (spawn-cargo "build" cfg))
      (take! #(put! out (reset! last-result %))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
