@@ -10,7 +10,7 @@
   "Builds the artifact described by the config
      + Compiler warnings may still be present in a successful result
    => pchan<[?err ?ok]>"
-  ([cfg] (cargo/build! (assoc cfg :cmd "build"))))
+  ([cfg] (cargo/build! (assoc cfg :cmd :build))))
 
 (defn cargo-run
   "Builds and then runs src/bin/main.rs or main.rs.
@@ -19,7 +19,7 @@
      + If your process emits json it will automatically be converted to edn
        under the ok's :stdout key
    => pchan<[?err ?ok]>"
-  ([cfg] (cargo/build! (assoc cfg :cmd "run"))))
+  ([cfg] (cargo/build! (assoc cfg :cmd :run))))
 
 (defn cargo-test
   "Run cargo's built-in test runner.
@@ -29,7 +29,7 @@
       - there is no structured (json) test result output.
     + Compiler warnings may still be present in a successful result
    => pchan<[?err ?ok]>"
-  ([cfg] (cargo/build! (assoc cfg :cmd "run"))))
+  ([cfg] (cargo/build! (assoc cfg :cmd :test))))
 
 (defn clean-project
   "delete compiled artifacts"
