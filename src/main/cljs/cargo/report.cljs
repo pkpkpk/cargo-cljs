@@ -108,7 +108,6 @@
   [msgs]
   (let [msgs (into []
                    (comp
-                    (filter cargo-msg?)
                     (remove artifact?)
                     (remove build-script?))
                    msgs)]
@@ -154,8 +153,8 @@
 
 
 (defn report-error [error]
-  (util/err (:cargo/type error))
-  (condp = (:cargo/type error)
+  (util/err (:cargo.cargo/type error))
+  (condp = (:cargo.cargo/type error)
 
     :cargo/compilation-failure
     (render-errors (get error :errors))
@@ -164,7 +163,9 @@
     (run! util/err (get error :stderr))
 
     :cargo/test-failure
-    (run! util/info (get error :stdout))
+    (let [test-output (get error :stdout)]
+      (run! util/status (get error :stderr))
+      (run! util/info test-output))
 
     :cargo/missing-toml
     (do
