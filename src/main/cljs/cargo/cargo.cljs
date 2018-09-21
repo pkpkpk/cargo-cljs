@@ -161,8 +161,9 @@
                 :silent? true
                 :env (merge {"RUSTFLAGS" rustflags} (get cfg :env))}
           out (collect-build (spawn/collected-spawn "cargo" args opts))]
-      (when *verbose* (util/status "$ " (string/join " " (into ["cargo"] args))))
-      (when *verbose* (util/status (pr-str opts)))
+      (when *verbose*
+        (util/status (string/join " " (into ["$" "cargo"] args)))
+        (util/status opts))
       out)))
 
 (defn wasm-gc [{:keys [project-name release? build-dir] :as cfg}]

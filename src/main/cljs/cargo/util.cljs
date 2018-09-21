@@ -38,9 +38,9 @@
         (let [item (first args)]
           (if (string? item)
             (.append sb " " item)
-            (.append sb " " (if ^boolean *pprint*
-                              (with-out-str (pp/pprint item))
-                              (pr-str item))))
+            (.append sb  (if ^boolean *pprint*
+                           (with-out-str (pp/pprint item))
+                           (pr-str item))))
           (recur (rest args)))))))
 
 (def ^{:dynamic true :doc "should be fn<var-args>"} *log*)
