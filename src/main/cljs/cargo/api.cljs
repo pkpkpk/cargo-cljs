@@ -114,7 +114,13 @@
       (get e :errors)
       (get data :errors))))
 
+(defn render-warnings
+  ([] (render-warnings (get-warnings)))
+  ([warnings] (report/render-warnings warnings)))
 
+(defn render-errors
+  ([] (render-errors (get-errors)))
+  ([errors] (report/render-errors errors)))
 
 ; (defn explain []
 ;   (when (some? (first @last-result))
