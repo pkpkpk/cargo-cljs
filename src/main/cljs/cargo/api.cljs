@@ -35,7 +35,7 @@
   "delete compiled artifacts"
   [cfg] (cargo/clean-project cfg))
 
-(defn build-wasm!
+(defn build-wasm
   "Builds a wasm project but with the extra steps of exec'ing wasm-gc on the
    build artifact and returning it as an uninstantiated buffer
      + Compiler warnings may still be present in a successful result
@@ -51,15 +51,15 @@
               (if err (put! out gc-res)
                 (put! out (reset! cargo/last-result (assoc-in comp-res [1 :buffer] buffer))))))))))))
 
-(defn build-wasm-local!
+(defn build-wasm-local
   "Build and instantiate modules local to the build nodejs process.
      + Compiler warnings may still be present in a successful result
    => pchan<[?err ?instantiated-module]>"
-  ([cfg](build-wasm-local! cfg nil))
+  ([cfg](build-wasm-local cfg nil))
   ([cfg importOptions]
    (assert (= :wasm (get cfg :target)))
    (with-promise out
-     (take! (build-wasm! cfg)
+     (take! (build-wasm cfg)
        (fn [[err {:keys [buffer]} :as comp-res]]
          (if err (put! out comp-res)
            (let [importOptions (or importOptions (get cfg :importOptions #js{}))]
