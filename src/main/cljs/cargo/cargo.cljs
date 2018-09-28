@@ -112,7 +112,7 @@
 
 
 (defn cfg->build-args [{:keys [target release? features
-                               bin-args cargo-args rustc-args verbose?] :as cfg}]
+                               bin-args cargo-args rustc-args cargo-verbose] :as cfg}]
   (when bin-args (assert (string? bin-args)))
   (when features (assert (or (string? features) (vector? features))))
   (let [args (cond-> [(target->arg target)
@@ -121,7 +121,7 @@
                       ; "--lib"
                       ; "--test" "NAME"
                       ]
-                verbose? (conj "--verbose")
+                cargo-verbose (conj "--verbose")
                 features (conj "--features" (if (string? features)
                                               features
                                               (string/join " " features)))
