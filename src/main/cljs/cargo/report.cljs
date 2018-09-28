@@ -153,8 +153,8 @@
 
 
 (defn report-error [error]
-  (util/err (:cargo.cargo/type error))
-  (condp = (:cargo.cargo/type error)
+  (util/err (:type error))
+  (condp = (:type error)
 
     :cargo/compilation-failure
     (render-errors (get error :errors))

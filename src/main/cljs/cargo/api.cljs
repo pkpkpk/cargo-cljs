@@ -42,7 +42,6 @@
    => pchan<[?err ?{:buffer js/Buffer, ...}]>"
   ([cfg]
    (assert (= :wasm (get cfg :target)))
-   (util/info "building wasm project" (get cfg :project-name))
    (with-promise out
      (take! (cargo-build cfg)
        (fn [[err :as comp-res]]

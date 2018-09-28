@@ -16,6 +16,13 @@
 ;; bindings will not survive ticks so must set!
 (def ^:dynamic *verbose* true)
 
+(defn verbose-state
+  "helper for propagating verbose state across async chains"
+  [cfg]
+  (if (boolean? (get cfg :verbose))
+    (get cfg :verbose)
+    *verbose*))
+
 (defn project-path [{:keys [project-name dir] :as cfg}]
   (or dir (path.join "rust" project-name)))
 
@@ -52,7 +59,7 @@
    nodeback vector:
 
    if error
-      => [{::type :error-type
+      => [{:type :error-type
            :warnings [{}..]
            :errors [{}..]
            :stdout [...]
@@ -66,12 +73,12 @@
     (take! spawn-chan
      (fn [[spawn-error [exit-code stdout stderr :as res]]]
        (if (some? spawn-error)
-         (put! out [{::type :spawn-error :value spawn-error}])
+         (put! out [{:type :spawn-error :value spawn-error}])
          (let [base (-> (report/sort-cargo-stdout stdout)
                         (assoc :stderr stderr))]
            (if (zero? exit-code)
              (do
-               (when (and *verbose* (not-empty (get base :warnings)))
+               (when (and (verbose-state cfg) (not-empty (get base :warnings)))
                  (util/warn "found warnings"))
                (put! out [nil base]))
              (let [key (cond
@@ -92,7 +99,7 @@
 
                          :else
                          :cargo/compilation-failure)]
-               (put! out [(assoc base ::type key)])))))))))
+               (put! out [(assoc base :type key)])))))))))
 
 (def cargo-arg->str
   (let [sb (goog.string.StringBuffer.)]
@@ -161,7 +168,7 @@
                 :silent? true
                 :env (merge {"RUSTFLAGS" rustflags} (get cfg :env))}
           out (collect-build (spawn/collected-spawn "cargo" args opts))]
-      (when *verbose*
+      (when (verbose-state cfg)
         (util/status (string/join " " (into ["$" "cargo"] args)))
         (util/status opts))
       out)))
@@ -169,16 +176,17 @@
 (defn wasm-gc [{:keys [project-name release? build-dir] :as cfg}]
   (with-promise out
     (if-not (fs/fexists? build-dir)
-      (put! out [{::type :wasm/path-missing-before-wasm-gc :path build-dir}])
+      (put! out [{:type :wasm/path-missing-before-wasm-gc :path build-dir}])
       (let [filename (dot-wasm-file cfg)]
-        (when *verbose* (util/info (str  "running wasm-gc on " (path.join  build-dir filename))))
+        (when (verbose-state cfg)
+          (util/info (str  "running wasm-gc on " (path.join  build-dir filename))))
          ;;just overwriting for now until can compile to given name
         (take! (proc/aexec (string/join " " ["wasm-gc"  filename filename]) {:cwd build-dir})
           (fn [[err stdout stderr]]
             (if err
-              (put! out [{::type :wasm/wasm-gc-failure :value err :stdout stdout :stderr stderr}])
+              (put! out [{:type :wasm/wasm-gc-failure :value err :stdout stdout :stderr stderr}])
               (if-not (fs/fexists? (get cfg :dot-wasm-path))
-                (put! out [{::type :wasm/path-missing-after-wasm-gc}])
+                (put! out [{:type :wasm/path-missing-after-wasm-gc}])
                 (put! out [nil])))))))))
 
 (defn p->ch
@@ -200,7 +208,7 @@
             (fn [[e mod]]
               (if-not e
                 [nil mod]
-                [{::type :wasm/instantiation-failure :value e}])))))))
+                [{:type :wasm/instantiation-failure :value e}])))))))
 
 (defn config-wasm-paths [{:keys [release?] :as cfg}]
   (let [build-dir (if release?
@@ -228,9 +236,10 @@
               (take! (aslurp path :encoding "")
                 (fn [[ioerr buffer]]
                   (if ioerr
-                    (put! out [{::type :wasm/slurp-module-failure :value ioerr}])
+                    (put! out [{:type :wasm/slurp-module-failure :value ioerr}])
                     (do
-                      (when *verbose* (util/success "wasm compilation success, returning compiled module"))
+                      (when (verbose-state cfg)
+                        (util/success "wasm compilation success, returning compiled module"))
                       (put! out [nil buffer]))))))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
