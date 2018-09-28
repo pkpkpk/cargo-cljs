@@ -2,34 +2,28 @@
   (:require-macros [cargo.macros :as mac]
                    [wasm-demo.macros :as dmac])
   (:require [cljs.core.async :as casync :refer [close! put! take! alts! <! >! chan promise-chan]]
-            [cargo.cargo :as cargo]
+            [cargo.api :as cargo]
             [cargo.util :refer [log]]
             [wasm-demo.util :as util]))
 
 (def path (js/require "path"))
-(set! cargo/*verbose* true)
 
 (def cfg
   {:project-name "basics"
    :dir (path.join (dmac/example-path) "rust"  "wasm-basics")
    :release? true
-   :silent? true
+   :verbose true
    :target :wasm})
 
 (defonce module (atom nil))
 
 (defn build []
-  (take! (cargo/build! cfg)
-    (fn [[e buffer]]
+  (take! (cargo/build-wasm-local cfg nil)
+    (fn [[e instance]]
       (if e
         (cargo/report-error e)
-        (let [importOptions #js{}]
-          (take! (cargo/init-module buffer importOptions)
-            (fn [[e compiled]]
-              (if e
-                (cargo/report-error e)
-                (do
-                  (reset! module (.. compiled -instance)))))))))))
+        (do
+          (reset! module instance))))))
 
 (defn clean []
   (cargo/clean-project cfg)
