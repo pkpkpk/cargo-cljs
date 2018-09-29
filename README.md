@@ -64,7 +64,7 @@ Notice the warnings key! Even if your build succeeded, there may still be warnin
 
 <hr>
 
-#### There are 5 basic commands
+#### There are 5 basic commands...
   + `(cargo.api/cargo-build cfg)`
     - builds the artifact described by the config, nothing more
   + `(cargo.api/cargo-run cfg)`
@@ -80,7 +80,28 @@ Notice the warnings key! Even if your build succeeded, there may still be warnin
     - compile a wasm project and return the binary in a nodejs buffer
     - automatically runs wasm-gc
   + `(cargo.api/build-wasm-local cfg ?importOptions)`
-    - same as build-wasm! but instantiates it local to the build process, returning its instance
+    - same as build-wasm but instantiates it local to the build process, returning its instance
+
+#### ...and a bunch of repl helpers
+  + `(cargo.api/report-error err)`
+    - accepts an error result from any build step and tries to log it in a sensible way
+  + `(cargo.api/last-result)`
+    - every build result is stored in an atom for easy retrieval and inspection at the repl
+  + `(cargo.api/get-stdout)`
+    - get stdout from last build
+  + `(cargo.api/get-stderr)`
+    - get stderr from last build
+  + `(cargo.api/get-warnings)`
+    - get warnings from last build
+  + `(cargo.api/get-errors)`
+    - get errors from last build
+  + `(cargo.api/render-warnings ?warnings)`
+    - log the ascii art from the warnings
+    - if omitted, will default to `(get-warnings)`
+  + `(cargo.api/render-errors ?errors)`
+    - log the ascii art from the errors
+    - if omitted, will default to `(get-errors)`
+
 
 <hr>
 
