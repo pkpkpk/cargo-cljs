@@ -1,5 +1,5 @@
-# cargo-cljs
-
+# `[cargo-cljs "0.1.0"]`
+## `cargo-cljs {:mvn/version  "0.1.0"}`
 
 ### Setup Rust
 
