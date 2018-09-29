@@ -34,10 +34,10 @@ Run `$rustup update` periodically to update the toolchain.
    :release? true})
 
 (defn build []
-  (take! (api/build-wasm cfg) ;<-- all build fns return promise chans
+  (take! (cargo/build-wasm cfg) ;<-- all build fns return promise chans
     (fn [[err {:keys [buffer]}]] ;<-- channels yield [?err ?ok]
       (if err
-         (api/report-error err) ;<---just a logging helper
+         (cargo/report-error err) ;<---just a logging helper
          (send-module-somewhere buffer))))
 ```
 
@@ -85,6 +85,8 @@ Notice the warnings key! Even if your build succeeded, there may still be warnin
     - same as build-wasm but instantiates it local to the build process, returning its instance
 
 #### ...and a bunch of repl helpers
+  + `(cargo.api/clean-project cfg)`
+    - delete compiled artifacts
   + `(cargo.api/report-error err)`
     - accepts an error result from any build step and tries to log it in a sensible way
   + `(cargo.api/last-result)`
