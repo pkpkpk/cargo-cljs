@@ -52,6 +52,28 @@
 (def ^{:dynamic true :doc "should be fn<var-args>"} *err*)
 (def ^{:dynamic true :doc "should be fn<var-args>"} *error*)
 
+(defn override-all! [f]
+  (do
+    (set! *log* f)
+    (set! *info* f)
+    (set! *status* f)
+    (set! *success* f)
+    (set! *warn* f)
+    (set! *warning* f)
+    (set! *err* f)
+    (set! *error* f)))
+
+(defn override-map! [m]
+  (do
+    (set! *log* (get m :log))
+    (set! *info* (get m :info))
+    (set! *status* (get m :status))
+    (set! *success* (get m :success))
+    (set! *warn* (get m :warn))
+    (set! *warning* (get m :warning))
+    (set! *err* (get m :err))
+    (set! *error* (get m :error))))
+
 (defn log
   "applies no styling"
   [& args]
