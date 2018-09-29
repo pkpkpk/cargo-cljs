@@ -65,21 +65,21 @@ Notice the warnings key! Even if your build succeeded, there may still be warnin
 <hr>
 
 #### There are 5 basic commands
-  1. `(cargo.api/cargo-build cfg)`
+  + `(cargo.api/cargo-build cfg)`
     - builds the artifact described by the config, nothing more
-  2. `(cargo.api/cargo-run cfg)`
+  + `(cargo.api/cargo-run cfg)`
     - builds and runs main.rs
     - pass args to your bin with `:bin-args ""`
     - your bin's output if any should show up in stdout/stderr
     - not applicable to wasm
-  3. `(cargo.api/cargo-test cfg)`
+  + `(cargo.api/cargo-test cfg)`
     - runs cargo's built-in test runner
     - [no structured output](https://github.com/rust-lang/rfcs/pull/2318)
     - not applicable to wasm
-  4. `(cargo.api/build-wasm cfg)`
+  + `(cargo.api/build-wasm cfg)`
     - compile a wasm project and return the binary in a nodejs buffer
     - automatically runs wasm-gc
-  5. `(cargo.api/build-wasm-local cfg ?importOptions)`
+  + `(cargo.api/build-wasm-local cfg ?importOptions)`
     - same as build-wasm! but instantiates it local to the build process, returning its instance
 
 <hr>
