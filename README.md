@@ -102,10 +102,11 @@ Notice the warnings key! Even if your build succeeded, there may still be warnin
     - log the ascii art from the errors
     - if omitted, will default to `(get-errors)`
 
+#### Logging
 
-<hr>
+The default logging scheme found in `cargo.util` is intended to work with [chrome devtools](https://nodejs.org/en/docs/guides/debugging-getting-started/#chrome-devtools-55) rigged up to your nodejs process. It is worthwhile to take the time to set this up, or even use electron. There are many chrome extensions for doing this automatically: be wary of them! A little convenience is not worth the risk.
 
-#### Logging, Nodejs development
+Each function just adds some simple coloring cues. You can override every log fn with `(cargo.util/override-all! f)` or individually with `(cargo.util/override-map! {...})` if you dislike them.
 
 
 <hr>
@@ -130,7 +131,7 @@ Notice the warnings key! Even if your build succeeded, there may still be warnin
 ```
 <hr>
 
-### Please Raise an Issue if:
+### Please raise an issue if:
   + You get an error and you find it obscure or unhelpful
   + Anything is confusing or poorly documented
   + There is something preventing you from incorporating this into your workflow
