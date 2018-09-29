@@ -1,6 +1,8 @@
 # `[cargo-cljs "0.1.0"]`
 ## `cargo-cljs {:mvn/version  "0.1.0"}`
 
+[![Clojars Project](https://img.shields.io/clojars/v/cargo-cljs.svg)](https://clojars.org/cargo-cljs)
+
 ### Setup Rust
 
 1) [Install Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)

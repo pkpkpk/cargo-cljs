@@ -1,4 +1,6 @@
 .cpcache/*
 */target/*
+*target/*
+pom.xml
 examples/*/*/target/*
 examples/*/.cpcache/*
