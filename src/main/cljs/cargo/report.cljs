@@ -73,8 +73,8 @@
 (defn cargo-msg? [msg]
   (or
    (message? msg)
-   (some? (:reason m))
-   (some? (:message m))))
+   (some? (:reason msg))
+   (some? (:message msg))))
 
 
 (defn group-file-warnings
