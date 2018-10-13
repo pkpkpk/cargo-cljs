@@ -161,6 +161,9 @@
   (assert (#{"build" "run" "test"} cmd) (str "unsupport cargo cmd " cmd))
   (let [location (project-path cfg)]
     (assert (fs/fexists? location) (str "cannot compile `" project-name"`, location " location " does not exist."))
+    (assert (and (fs/dir? location)
+                 (fs/fexists? (path.join location "Cargo.toml")))
+      (str "cannot compile `" project-name"`, location " location " must be a directory containing a Cargo.toml"))
     (let [args (into [cmd] (cfg->build-args cfg))
           rustflags (cfg->rustflags cfg)
           opts {:cwd location
