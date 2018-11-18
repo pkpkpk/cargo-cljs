@@ -88,6 +88,9 @@
                          (some #(string/includes? % "fatal runtime") stderr)
                          :cargo/fatal-runtime
 
+                         (some #(string/includes? % "failed to load source for a dependency ") stderr)
+                         :cargo/dependency-error
+
                          (string/includes? (peek stderr) "test failed")
                          :cargo/test-failure
 
