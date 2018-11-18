@@ -253,7 +253,7 @@
   "we route everything through here to simplify storing build results in last-result"
   [cfg]
   (when-let [cmd (and (not= (get cfg :target) :wasm) (get cfg :cmd))]
-    (assert (#{:test :run} cmd) "only support :target :wasm builds, '$cargo run', or '$cargo test'"))
+    (assert (#{:test :run :build} cmd) "only support :target :wasm builds, '$cargo run', or '$cargo test'"))
   (with-promise out
     (-> (case (get cfg :cmd)
           :test (spawn-cargo "test" cfg)
