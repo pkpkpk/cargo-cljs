@@ -146,6 +146,7 @@
    :cargo/missing-toml
    :cargo/bad-toml
    :cargo/dependency-error
+   :cargo/missing-bin-target
 
    :wasm/path-missing-before-wasm-gc
    :wasm/wasm-gc-failure
@@ -174,6 +175,9 @@
     (some-> (first stderr) (string/includes?  "parse manifest"))
     :cargo/bad-toml
 
+    (some-> (first stderr) (string/includes?  "error: a bin target must be available for `cargo run`"))
+    :cargo/missing-bin-target
+
     :else
     :cargo/compilation-failure))
 
@@ -197,6 +201,10 @@
     (do
       (util/err (first (get error :stderr)))
       (util/err "(case sensitive)")) ;repair would be cool
+
+    :cargo/missing-bin-target
+    (util/err (first (get error :stderr)))
+
 
     :cargo/bad-toml
     (run! util/err (get error :stderr))
