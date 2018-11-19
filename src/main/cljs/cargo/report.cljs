@@ -56,7 +56,8 @@
         :spans [{} ..]    <--- src file details: filename, line, col, etc
         :rendered '..'    <--- ascii art highlighting the problem in your src
       }"}
-  (:require [cargo.util :as util]))
+  (:require [clojure.string :as string]
+            [cargo.util :as util]))
 
 
 
@@ -144,12 +145,37 @@
    :cargo/test-failure
    :cargo/missing-toml
    :cargo/bad-toml
+   :cargo/dependency-error
 
    :wasm/path-missing-before-wasm-gc
    :wasm/wasm-gc-failure
    :wasm/path-missing-after-wasm-gc
    :wasm/slurp-module-failure
    :wasm/instantiation-failure])
+
+(defn categorize-error
+  [stderr] ; Vec<String>
+  (cond
+    (string/includes? (peek stderr) "Running")
+    :cargo/run-failure
+
+    (some #(string/includes? % "fatal runtime") stderr)
+    :cargo/fatal-runtime
+
+    (some #(string/includes? % "failed to load source for a dependency ") stderr)
+    :cargo/dependency-error
+
+    (string/includes? (peek stderr) "test failed")
+    :cargo/test-failure
+
+    (string/includes? (peek stderr) "could not find `Cargo.toml`")
+    :cargo/missing-toml
+
+    (some-> (first stderr) (string/includes?  "parse manifest"))
+    :cargo/bad-toml
+
+    :else
+    :cargo/compilation-failure))
 
 
 (defn report-error [error]

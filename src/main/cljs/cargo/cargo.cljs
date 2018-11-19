@@ -81,28 +81,7 @@
                (when (and (verbose-state cfg) (not-empty (get base :warnings)))
                  (util/warn "found warnings"))
                (put! out [nil base]))
-             (let [key (cond
-                         (string/includes? (peek stderr) "Running")
-                         :cargo/run-failure
-
-                         (some #(string/includes? % "fatal runtime") stderr)
-                         :cargo/fatal-runtime
-
-                         (some #(string/includes? % "failed to load source for a dependency ") stderr)
-                         :cargo/dependency-error
-
-                         (string/includes? (peek stderr) "test failed")
-                         :cargo/test-failure
-
-                         (string/includes? (peek stderr) "could not find `Cargo.toml`")
-                         :cargo/missing-toml
-
-                         (some-> (first stderr) (string/includes?  "parse manifest"))
-                         :cargo/bad-toml
-
-                         :else
-                         :cargo/compilation-failure)]
-               (put! out [(assoc base :type key)])))))))))
+             (put! out [(assoc base :type (report/categorize-error stderr))]))))))))
 
 (def cargo-arg->str
   (let [sb (goog.string.StringBuffer.)]
