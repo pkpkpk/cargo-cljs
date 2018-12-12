@@ -54,35 +54,6 @@
     :wasm "--target=wasm32-unknown-unknown"
     nil))
 
-(defn collect-build
-  "Sorts spawn output into failed and result, returning a promise-chan yielding
-   nodeback vector:
-
-   if error
-      => [{:type :error-type
-           :warnings [{}..]
-           :errors [{}..]
-           :stdout [...]
-           :stderr [...]}]
-   else
-      => [nil {:warnings [{}...]
-               :stdout [<-- your app output--> ]
-               :stderr ['status' 'messages']}]"
-  [spawn-chan]
-  (with-promise out
-    (take! spawn-chan
-     (fn [[spawn-error [exit-code stdout stderr :as res]]]
-       (if (some? spawn-error)
-         (put! out [{:type :spawn-error :value spawn-error}])
-         (let [base (-> (report/sort-cargo-stdout stdout)
-                        (assoc :stderr stderr))]
-           (if (zero? exit-code)
-             (do
-               (when (and (verbose-state cfg) (not-empty (get base :warnings)))
-                 (util/warn "found warnings"))
-               (put! out [nil base]))
-             (put! out [(assoc base :type (report/categorize-error stderr))]))))))))
-
 (def cargo-arg->str
   (let [sb (goog.string.StringBuffer.)]
     (fn [arg]
@@ -97,12 +68,13 @@
                                bin-args cargo-args rustc-args cargo-verbose] :as cfg}]
   (when bin-args (assert (string? bin-args)))
   (when features (assert (or (string? features) (vector? features))))
-  (let [args (cond-> [(target->arg target)
-                      (when release? "--release")
-                      "--message-format=json"
-                      ; "--lib"
-                      ; "--test" "NAME"
-                      ]
+  (let [base [(target->arg target)
+              (when release? "--release")
+              "--message-format=json"
+              ; "--lib"
+              ; "--test" "NAME"
+              ]
+        args (cond-> base
                 cargo-verbose (conj "--verbose")
                 features (conj "--features" (if (string? features)
                                               features
@@ -131,17 +103,33 @@
 ;  :silent?
 
 (defn cfg->rustflags [{ :as cfg}]
-  (let [allow (flagged-kw-args "-A" (get-in cfg [:rustflags :allow]))
-        rustc-cfg (flagged-kw-args "--cfg" (get-in cfg [:rustflags :cfg]))]
-    (string/join " " [allow rustc-cfg])))
+  (let [allows    (flagged-kw-args "-A" (get-in cfg [:rustflags :allow]))
+        cfg-flags (flagged-kw-args "--cfg" (get-in cfg [:rustflags :cfg]))]
+    (string/join " " (remove empty? [allows cfg-flags ]))))
 
+; (when (= :wasm target) "--gc-sections")
 ; "-C" "link-args=--import-memory"  llvm args?
+;      "link-args=--gc-sections"
 ; RUST_BACKTRACE env opt, values #{"1", "full"}
 
 (defn spawn-cargo
-  [cmd {:keys [project-name silent?] :as cfg}]
-  (assert (#{"build" "run" "test"} cmd) (str "unsupport cargo cmd " cmd))
-  (let [location (project-path cfg)]
+  "Sorts spawn output into failed and result, returning a promise-chan yielding
+   nodeback vector:
+
+   if error
+      => [{:type :error-type
+           :warnings [{}..]
+           :errors [{}..]
+           :stdout [...]
+           :stderr [...]}]
+   else
+      => [nil {:warnings [{}...]
+               :stdout [<-- your app output--> ]
+               :stderr ['status' 'messages']}]"
+  [{:keys [project-name silent? cmd] :as cfg}]
+  (let [location (project-path cfg)
+        cmd (name cmd)]
+    (assert (#{"build" "run" "test"} cmd) (str "unsupport cargo cmd " cmd))
     (assert (fs/fexists? location) (str "cannot compile `" project-name"`, location " location " does not exist."))
     (assert (and (fs/dir? location)
                  (fs/fexists? (path.join location "Cargo.toml")))
@@ -151,12 +139,22 @@
           opts {:cwd location
                 :json->edn? true
                 :silent? true
-                :env (merge {"RUSTFLAGS" rustflags} (get cfg :env))}
-          out (collect-build (spawn/collected-spawn "cargo" args opts))]
+                :env (merge {"RUSTFLAGS" rustflags} (get cfg :env))}]
       (when (verbose-state cfg)
         (util/status (string/join " " (into ["$" "cargo"] args)))
         (util/status opts))
-      out)))
+      (with-promise out
+        (take! (spawn/collected-spawn "cargo" args opts)
+          (fn [[spawn-error [exit-code stdout stderr :as res]]]
+            (if (some? spawn-error)
+              (put! out [{:type :spawn-error :value spawn-error}])
+              (let [base (-> (report/sort-cargo-stdout stdout)
+                             (assoc :stderr stderr))]
+                (when (and (verbose-state cfg) (not-empty (get base :warnings)))
+                  (util/warn "found warnings"))
+                (if (zero? exit-code)
+                  (put! out [nil base])
+                  (put! out [(assoc base :type (report/categorize-error stderr))]))))))))))
 
 (defn wasm-gc [{:keys [project-name release? build-dir] :as cfg}]
   (with-promise out
@@ -237,11 +235,7 @@
   (when-let [cmd (and (not= (get cfg :target) :wasm) (get cfg :cmd))]
     (assert (#{:test :run :build} cmd) "only support :target :wasm builds, '$cargo run', or '$cargo test'"))
   (with-promise out
-    (-> (case (get cfg :cmd)
-          :test (spawn-cargo "test" cfg)
-          :run (spawn-cargo "run" cfg)
-          (spawn-cargo "build" cfg))
-     (take! #(put! out (reset! last-result %))))))
+    (take! (spawn-cargo cfg) #(put! out (reset! last-result %)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
