@@ -187,7 +187,9 @@
   (condp = (:type error)
 
     :cargo/compilation-failure
-    (render-errors (get error :errors))
+    (if-let [es (not-empty (get error :errors))]
+      (render-errors es)
+      (run! util/err (get error :stderr)))
 
     :cargo/fatal-runtime
     (run! util/err (get error :stderr))
